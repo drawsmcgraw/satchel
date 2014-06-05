@@ -1,6 +1,7 @@
 # Install some pre-reqs
 yum install -y unzip wget git GitPython vim
-git config --global user.name "drawsmcgraw"
+git config --global user.name  "drawsmcgraw"
+git config --global user.email "drawsmcgraw"
 
 # Fetch, then run, the Salt-bootstrap script
 # -M to install salt-master
