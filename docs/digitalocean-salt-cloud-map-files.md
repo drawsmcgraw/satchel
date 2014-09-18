@@ -4,11 +4,12 @@
 
 * Two basic app servers
 * An nginx reverse proxy with a dynamically-built configuration
+* The ability to scale your application in five minutes
 
 ## Prerequisites
 You'll need to have Salt Cloud configured on your machine.  [Automated Provisioning of DigitalOcean Cloud Servers with Salt Cloud on Ubuntu 12.04](https://www.digitalocean.com/community/tutorials/automated-provisioning-of-digitalocean-cloud-servers-with-salt-cloud-on-ubuntu-12-04) can help get you set up. Note that while previous articles focus on Ubuntu, this tutorial is applicable to most major Linux distros (Debian-and-RHEL family).
 
-**NOTE**: Your Salt Master that you use for this tutorial will need to be accessible to the minions you will create. This means that if you're on your home machine behind a NAT'd network, you'll need to create a droplet (or some other publicly-accessible machine) and use that for your Salt Master.
+**NOTE**: The Salt Master that you use for this tutorial will need to be accessible to the minions you will create. This means that if you're on your home machine behind a NAT'd network, you'll need to create a droplet (or some other publicly-accessible machine) and use that for your Salt Master.
 
 ## Map file locations
 Recall that, in Salt Cloud, you need to define at least one `provider` and at least one `profile`. Those are defined at the following locations:
@@ -16,7 +17,7 @@ Recall that, in Salt Cloud, you need to define at least one `provider` and at le
 * `/etc/salt/cloud.providers.d` -- cloud providers (e.g. digitalocean)
 * `/etc/salt/cloud.profiles.d` -- cloud profiles (e.g. ubuntu_2GB)
 
-Assuming you followed the previous tutorial on setting up Salt Cloud, you should have the following in `/etc/salt/cloud.providers.d/digital_ocean.conf:
+Assuming you followed the previous tutorial on setting up Salt Cloud, you should have the following in `/etc/salt/cloud.providers.d/digital_ocean.conf`:
 
 ~~~~
 do:
@@ -52,7 +53,7 @@ ubuntu_1GB_ny2:
 ~~~~
 
 ## Map Files - The Beginning
-Going with the above profiles, let's say you want two 1GB app servers fronted by a single 512MB reverse proxy. You can place mapfiles wherever is best for you but for this demonstration, let's make a mapfile in `/etc/salt/mapfiles/do-app-with-rproxy.conf` and put the following in it:
+Going with the above profiles, let's say you want two 1GB app servers fronted by a single 512MB reverse proxy. You can place mapfiles wherever is best for you but for this demonstration, let's make a mapfile in `/etc/salt/mapfiles/do-app-with-rproxy.map` and put the following in it:
 
 ~~~~
 ubuntu_512MB_ny2:
@@ -66,10 +67,10 @@ ubuntu_1GB_ny2:
 That's it! That's about as simple as a Map File gets. Go ahead and try it out with:
 
 ~~~~
-salt-cloud -P -m /etc/salt/mapfiles/do-app-with-rproxy.conf
+salt-cloud -P -m /etc/salt/mapfiles/do-app-with-rproxy.map
 ~~~~
 
-The `-P` is for 'parallel`, telling Salt Cloud to launch all three VMs at the same time (as oppossed to one after the other).
+The `-P` is for 'parallel`, telling Salt Cloud to launch all three VMs at the same time (as opposed to one after the other).
 
 Once you've successfully created the VMs in your map file, deleting them is just as easy:
 ~~~~
@@ -126,7 +127,7 @@ We've told Salt Cloud to modify the Salt Minion config for these VMs and add som
 ~~~~
 This will also be added to the Salt Minion config. It instructs the Minion to send the IP address found on `eth0` back to the Salt Master to be stored in the [Salt mine](http://docs.saltstack.com/en/latest/topics/mine/). We'll be using that in the next part.
 
-## Automate the Reverse Proxy
+## Define the Reverse Proxy
 We have a common task in front of us now - install the reverse proxy and configure it. For this tutorial we'll be using Nginx as the reverse proxy. 
 
 It's time to get our hands dirty and write a few Salt states. If it doesn't exist yet, go ahead and make the default Salt state tree location:
@@ -238,7 +239,7 @@ server_name  {{ salt['network.ip_addrs']()[0] }};
 
 This is the same trick as the Salt mine call (call a Salt function in Jinja). It's just simpler. It's calling [`network.ip_addrs`](http://docs.saltstack.com/en/latest/ref/modules/all/salt.modules.network.html#salt.modules.network.ip_addrs) and taking the first element of the returned list. This also lets us avoid having to manually edit our file.
 
-## Build the App Farm
+## Define the App Farm
 A reverse proxy doesn't mean much if it doesn't have an app behind it. Let's make a small Nodejs application that just reports the IP of the server it's on (so we can confirm we're reaching both machines).
 
 Back in our state tree, make a new directory called `awesome-app`. Create a new file called `app.sls`.
@@ -315,4 +316,41 @@ console.log('Server listening on port 1337');
 
 ~~~~ 
 
- 
+## Deploy!
+We're done! All that's left is to deploy the application.
+
+~~~~
+salt-cloud -P -m /etc/salt/mapfiles/do-app-with-rproxy.map
+~~~~
+
+Wait for Salt Cloud to complete. Confirm successful deployment with a quick test:
+
+~~~~
+salt -G 'roles:appserver' test.ping
+salt -G 'roles:rproxy' test.ping
+
+NEED MOAR OUTPUT HERE
+~~~~
+
+Sweet! Now that you have your VMs, time to give them work.
+
+~~~~
+# Deploy the app farm
+salt -G 'roles:appserver' state.sls app.app
+
+# Deploy the reverse proxy
+salt -G 'roles:rproxy' state.sls nginx.rproxy
+~~~~
+
+Once those Salt runs complete, you can test to confirm successful deployment. Find the ip of your reverse proxy:
+
+~~~~
+salt -G 'roles:rproxy' network.ip_addrs
+~~~~
+
+Plug that IP into your browser and profit! Hit refresh a few times to confirm that Nginx is actually proxying among the two app servers you built.
+
+We can take this a few steps further and *completely* automate the application deployment via [overstate](http://docs.saltstack.com/en/latest/topics/tutorials/states_pt5.html#states-overstate) but that's an exercise for later.
+
+## Scale it!
+If you need more servers for your app farm (or more Nginx servers for load balancing), just revisit that map file, add another entry for each new server, and re-run the instructions in the "Deploy!" section. The existing VMs won't be impacted by the repeat Salt run and the new VMs will be built-to-spec and join the application.
