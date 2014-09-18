@@ -22,7 +22,9 @@ Assuming you followed the previous tutorial on setting up Salt Cloud, you should
 ~~~~
 do:
   provider: digital_ocean
-  
+  minion:                       #########################################
+    master: 10.10.10.10  # <--- CHANGE THIS to be your Salt Master's IP #
+                                #########################################
   # Digital Ocean account keys
   client_key: YourClientIDCopiedFromControlPanel
   api_key: YourAPIKeyCopiedFromControlPanel
@@ -37,7 +39,7 @@ And you should have something like the following in `/etc/salt/cloud.profiles.d/
 ~~~~
 ubuntu_512MB_ny2:
   provider: do
-  image: Ubuntu 12.04.4 x64
+  image: Ubuntu 14.04 x64
   size: 512MB
 #  script: Optional Deploy Script Argument
   location: New York 2
@@ -45,11 +47,12 @@ ubuntu_512MB_ny2:
 
 ubuntu_1GB_ny2:
   provider: do
-  image: Ubuntu 12.04.4 x64
+  image: Ubuntu 14.04 x64
   size: 1GB
 #  script: Optional Deploy Script Argument
   location: New York 2
   private_networking: True
+
 ~~~~
 
 ## Map Files - The Beginning
@@ -72,6 +75,12 @@ salt-cloud -P -m /etc/salt/mapfiles/do-app-with-rproxy.map
 
 The `-P` is for 'parallel`, telling Salt Cloud to launch all three VMs at the same time (as opposed to one after the other).
 
+Confirm success with a quick ping:
+
+~~~~
+salt '*' test.ping
+~~~~
+
 Once you've successfully created the VMs in your map file, deleting them is just as easy:
 ~~~~
 salt-cloud -d -m /etc/salt/mapfiles/do-app-with-rproxy.conf
@@ -84,7 +93,7 @@ That's nice and all, but a shell script can make a set of VMs. What we need is t
 
 ~~~~
 ubuntu_512MB_ny2:
-  - nginx-rproxy
+  - nginx-rproxy:
     minion:
       mine_functions:
         network.ip_addrs:
@@ -93,7 +102,7 @@ ubuntu_512MB_ny2:
         roles: rproxy
   
 ubuntu_1GB_ny2:
-  - appserver-01
+  - appserver-01:
     minion:
       mine_functions:
         network.ip_addrs:
@@ -101,7 +110,7 @@ ubuntu_1GB_ny2:
       grains:
         roles: appserver
           
-  - appserver-02
+  - appserver-02:
     minion:
       mine_functions:
         network.ip_addrs:
@@ -159,9 +168,15 @@ nginx-rproxy:
     - name: nginx
   file:
     - managed
-    - source: salt://nginx/files/rproxy.conf
-    - name: /etc/nginx/conf.d/awesome-app.conf.jin
+    - source: salt://nginx/files/awesome-app.conf.jin
+    - name: /etc/nginx/conf.d/awesome-app.conf
     - template: jinja
+    - require:
+      - pkg: nginx-rproxy
+  service:
+    - running
+    - enable: True
+    - name: nginx
     - require:
       - pkg: nginx-rproxy
 ~~~~
@@ -185,7 +200,7 @@ And put the following in that config file:
 
 upstream awesome-app {
     {% for server, addrs in salt['mine.get']('roles:appserver', 'network.ip_addrs', expr_form='grain').items() %}
-    server {{ addrs[0] }}
+    server {{ addrs[0] }};
     {% endfor %}
 }
 
@@ -193,18 +208,20 @@ server {
     listen       80;
     server_name  {{ salt['network.ip_addrs']()[0] }};
  
-    access_log  /var/log/nginx/log/awesome-app.access.log  main;
-    error_log  /var/log/nginx/log/awesome-app.error.log;
- 
+    access_log  /var/log/nginx/awesome-app.access.log;
+    error_log  /var/log/nginx/awesome-app.error.log;
+
     ## send request back to apache1 ##
     location / {
-     proxy_pass  awesome-app;
+     proxy_pass  http://awesome-app;
      proxy_set_header        Host            $host;
      proxy_set_header        X-Real-IP       $remote_addr;
      proxy_set_header        X-Forwarded-For $proxy_add_x_forwarded_for;
    }
 }
 ~~~~
+We use the `.jin` extension to tell ourselves that the file contains [Jinja templating](http://docs.saltstack.com/en/latest/ref/renderers/all/salt.renderers.jinja.html).
+
 This Nginx config has two parts - 1) an upstream (our app farm) and 2) the configuration to act as a proxy between the user and our app farm. Let's look at the upstream config.
 
 Before we explain what we did for the upstream, let's look at a normal, non-templated config.
@@ -260,17 +277,20 @@ Place the following into the file:
 install-app:
   pkg:
     - installed
-    - name: node
-  file:
+    - names: 
+      - node
+      - npm
+      - nodejs-legacy  # workaround for Debian systems
+  file: 
     - managed
     - source: salt://awesome-app/files/app.js
     - name: /root/app.js
-  npm:
-    - installed
-    - forever
+  cmd:
+    - run
+    - name: npm install forever -g
     - require:
       - pkg: install-app
-    
+   
 run-app:
   cmd:
     - run
@@ -280,7 +300,7 @@ run-app:
 
 Now create the (small!) app code:
 ~~~~
-mkdir file
+mkdir files
 cd files
 vim app.js
 ~~~~
