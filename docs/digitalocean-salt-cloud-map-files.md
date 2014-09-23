@@ -60,11 +60,11 @@ Going with the above profiles, let's say you want two 1GB app servers fronted by
 
 ~~~~
 ubuntu_512MB_ny2:
-  - nginx-rproxy
+    - nginx-rproxy
   
 ubuntu_1GB_ny2:
-  - appserver-01
-  - appserver-02
+    - appserver-01
+    - appserver-02
 ~~~~
 
 That's it! That's about as simple as a Map File gets. Go ahead and try it out with:
@@ -94,29 +94,28 @@ That's nice and all, but a shell script can make a set of VMs. What we need is t
 ~~~~
 ubuntu_512MB_ny2:
   - nginx-rproxy:
-    minion:
-      mine_functions:
-        network.ip_addrs:
-          interface: eth0
-      grains:
-        roles: rproxy
-  
+      minion:
+        mine_functions:
+          network.ip_addrs:
+            interface: eth0
+        grains:
+          roles: rproxy
 ubuntu_1GB_ny2:
-  - appserver-01:
+- appserver-01:
     minion:
       mine_functions:
         network.ip_addrs:
-          interface: eth0
+            interface: eth0
       grains:
         roles: appserver
-          
-  - appserver-02:
+- appserver-02:
     minion:
       mine_functions:
         network.ip_addrs:
-          interface: eth0
+            interface: eth0
       grains:
         roles: appserver
+
 ~~~~
 
 Now we're getting somewhere! It looks like a lot but we've only added two things. Let's go over the two additions.
@@ -179,6 +178,9 @@ nginx-rproxy:
     - name: nginx
     - require:
       - pkg: nginx-rproxy
+    - watch:
+      - file: nginx-rproxy
+
 ~~~~
 
 That's our Salt state. But that's not too interesting. It just installs Nginx and drops a config file. The good stuff is in that config file.
@@ -200,14 +202,15 @@ And put the following in that config file:
 
 upstream awesome-app {
     {% for server, addrs in salt['mine.get']('roles:appserver', 'network.ip_addrs', expr_form='grain').items() %}
-    server {{ addrs[0] }};
+    server {{ addrs[0] }}:1337;
     {% endfor %}
 }
 
 server {
     listen       80;
-    server_name  {{ salt['network.ip_addrs']()[0] }};
- 
+    server_name  {{ salt['network.ip_addrs']()[1] }};  # <-- change the '1' to '0' if you're not using 
+                                                       # Digital Ocean's private networking.
+
     access_log  /var/log/nginx/awesome-app.access.log;
     error_log  /var/log/nginx/awesome-app.error.log;
 
@@ -346,20 +349,35 @@ salt-cloud -P -m /etc/salt/mapfiles/do-app-with-rproxy.map
 Wait for Salt Cloud to complete. Confirm successful deployment with a quick test:
 
 ~~~~
-salt -G 'roles:appserver' test.ping
-salt -G 'roles:rproxy' test.ping
-
-NEED MOAR OUTPUT HERE
+[root@salt-master salt]# salt -G 'roles:appserver' test.ping
+appserver-02:
+    True
+appserver-01:
+    True
+[root@salt-master salt]# salt -G 'roles:rproxy' test.ping
+nginx-rproxy:
+    True
 ~~~~
 
 Sweet! Now that you have your VMs, time to give them work.
 
 ~~~~
 # Deploy the app farm
-salt -G 'roles:appserver' state.sls app.app
+salt -G 'roles:appserver' state.sls awesome-app.app
 
 # Deploy the reverse proxy
 salt -G 'roles:rproxy' state.sls nginx.rproxy
+~~~~
+
+You should see (a lot of) output ending in something like the following:
+
+~~~~
+Summary
+------------
+Succeeded: 6
+Failed:    0
+------------
+Total:     6
 ~~~~
 
 Once those Salt runs complete, you can test to confirm successful deployment. Find the ip of your reverse proxy:
