@@ -4,8 +4,7 @@
 
 * Two basic app servers
 * An nginx reverse proxy with a dynamically-built configuration
-* The ability to scale your application in minutes
-
+* The ability to scale your application in  minutes
 
 ## Prerequisites
 You'll need to have Salt Cloud configured on your machine.  [Automated Provisioning of DigitalOcean Cloud Servers with Salt Cloud on Ubuntu 12.04](https://www.digitalocean.com/community/tutorials/automated-provisioning-of-digitalocean-cloud-servers-with-salt-cloud-on-ubuntu-12-04) can help get you set up. Note that while previous articles focus on Ubuntu, this tutorial is applicable to most major Linux distros (Debian-and-RHEL family).
@@ -42,7 +41,6 @@ ubuntu_512MB_ny2:
   provider: do
   image: Ubuntu 14.04 x64
   size: 512MB
-
 #  script: Optional Deploy Script Argument
   location: New York 2
   private_networking: True
@@ -62,11 +60,11 @@ Going with the above profiles, let's say you want two 1GB app servers fronted by
 
 ~~~~
 ubuntu_512MB_ny2:
-    - nginx-rproxy
+  - nginx-rproxy
   
 ubuntu_1GB_ny2:
-    - appserver-01
-    - appserver-02
+  - appserver-01
+  - appserver-02
 ~~~~
 
 That's it! That's about as simple as a Map File gets. Go ahead and try it out with:
