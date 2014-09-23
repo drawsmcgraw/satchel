@@ -209,12 +209,12 @@ upstream awesome-app {
 server {
     listen       80;
     server_name  {{ salt['network.ip_addrs']()[1] }};  # <-- change the '1' to '0' if you're not using 
-                                                       # Digital Ocean's private networking.
+                                                       #     Digital Ocean's private networking.
 
     access_log  /var/log/nginx/awesome-app.access.log;
     error_log  /var/log/nginx/awesome-app.error.log;
 
-    ## send request back to apache1 ##
+    ## forward request to awesome-app ##
     location / {
      proxy_pass  http://awesome-app;
      proxy_set_header        Host            $host;
@@ -227,7 +227,7 @@ We use the `.jin` extension to tell ourselves that the file contains [Jinja temp
 
 This Nginx config has two parts - 1) an upstream (our app farm) and 2) the configuration to act as a proxy between the user and our app farm. Let's look at the upstream config.
 
-Before we explain what we did for the upstream, let's look at a normal, non-templated config.
+Before we explain what we did for the upstream, let's look at a normal, non-templated upstream.
 ~~~~
 upstream hard-coded {
   server 10.10.10.1
@@ -246,7 +246,7 @@ Back to us. We don't know what the IP of our Minions will be until they exist. A
 
 This is a for-loop in Jinja, running an arbitrary Salt function. In this case, it's running [`mine.get`](http://docs.saltstack.com/en/latest/ref/modules/all/salt.modules.mine.html#salt.modules.mine.get). The parameters are:
 
-* `roles:appserver` - This says to just get the details from the Minions who have the 'appserver' role.
+* `roles:appserver` - This says to only get the details from the Minions who have the 'appserver' role.
 * `network.ip_addrs` - This is the data we want to get out of the mine. We specified this in our map file as well.
 * `expr_form='grain'` - This tells Salt that we're targeting our minions based on their grains. More on matching by grain at [the Saltstack doc](http://docs.saltstack.com/en/latest/topics/targeting/grains.html).
 
@@ -360,7 +360,7 @@ We're done! All that's left is to deploy the application.
 salt-cloud -P -m /etc/salt/mapfiles/do-app-with-rproxy.map
 ~~~~
 
-Wait for Salt Cloud to complete. Confirm successful deployment with a quick test:
+Wait for Salt Cloud to complete (it can take a few minutes). Once it returns, confirm successful deployment with a quick test:
 
 ~~~~
 [root@salt-master salt]# salt -G 'roles:appserver' test.ping
