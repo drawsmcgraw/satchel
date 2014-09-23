@@ -339,6 +339,20 @@ console.log('Server listening on port 1337');
 
 ~~~~ 
 
+At this point, you should have a file structure that looks like the following:
+
+~~~~
+/srv/salt
+         ├── awesome-app
+         │   ├── app.sls
+         │   └── files
+         │       └── app.js
+         └── nginx
+             ├── files
+             │   └── awesome-app.conf.jin
+             └── rproxy.sls
+~~~~
+
 ## Deploy!
 We're done! All that's left is to deploy the application.
 
