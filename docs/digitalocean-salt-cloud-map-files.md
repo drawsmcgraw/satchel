@@ -7,17 +7,49 @@
 * The ability to scale your application in  minutes
 
 ## Prerequisites
-You'll need to have Salt Cloud configured on your machine.  [Automated Provisioning of DigitalOcean Cloud Servers with Salt Cloud on Ubuntu 12.04](https://www.digitalocean.com/community/tutorials/automated-provisioning-of-digitalocean-cloud-servers-with-salt-cloud-on-ubuntu-12-04) can help get you set up. Note that while previous articles focus on Ubuntu, this tutorial is applicable to most major Linux distros (Debian-and-RHEL family).
 
-**NOTE**: The Salt Master that you use for this tutorial will need to be accessible to the minions you will create. This means that if you're on your home machine behind a NAT'd network, you'll need to create a droplet (or some other publicly-accessible machine) and use that for your Salt Master.
+### A Note About Your Salt Master
+The Salt Master that you use for this tutorial will need to be accessible to the minions you will create. This means that if you're on your home machine behind a NAT'd network, you'll need to create a droplet (or some other publicly-accessible machine) and use that for your Salt Master.
 
-## Map file locations
-Recall that, in Salt Cloud, you need to define at least one `provider` and at least one `profile`. Those are defined at the following locations:
+### Install Salt
+You'll need to have Salt Cloud configured on your machine. Fortunately, since [Salt Cloud is part of salt since version Hydrogen](https://github.com/saltstack/salt-cloud), simply installing Salt gets us Salt Cloud. For the RHEL family (RedHat, CentOS, etc...), we'll just use the Salt bootstrap script. For Ubuntu, we'll need a few extra steps. For more production-like environments, you'll want to [read the documentation for your OS](http://docs.saltstack.com/en/latest/topics/installation/).
+
+On RHEL systems.
+~~~~
+# Fetch and run the Salt bootstrap script to install Salt
+wget -O install_salt.sh https://bootstrap.saltstack.com
+
+# Use the -M flag to also install 'salt-master' so we get salt cloud
+sh install_salt.sh -M
+~~~~
+
+On Ubuntu
+~~~~
+# Add the PPA
+sudo add-apt-repository ppa:saltstack/salt
+
+# Salt Cloud requires libcloud. We'll install via Pip
+sudo apt-get intall python-pip
+sudo pip install apache-libcloud
+
+# Install Salt Cloud
+sudo apt-get install salt-cloud
+~~~~
+
+Confirm a successful installation when done.
+
+~~~~
+root@ubuntu-salt:/var/tmp# salt-cloud --version                                                                                                                                                                      
+salt-cloud 2014.1.11 (Hydrogen)
+~~~~
+
+### Configure Salt Cloud
+Regardless of installation method, configuring Salt Cloud will be the same. You'll need at least one `provider` (e.g. Digital Ocean) and at least one `profile` (e.g. Ubuntu 512MB).Those are defined at the following locations (NOTE: You may need to make these directories yourself if they don't exist):
 
 * `/etc/salt/cloud.providers.d` -- cloud providers (e.g. digitalocean)
 * `/etc/salt/cloud.profiles.d` -- cloud profiles (e.g. ubuntu_2GB)
 
-Assuming you followed the previous tutorial on setting up Salt Cloud, you should have the following in `/etc/salt/cloud.providers.d/digital_ocean.conf`:
+For this tutorial, let's put the following in `/etc/salt/cloud.providers.d/digital_ocean.conf`:
 
 ~~~~
 do:
@@ -28,13 +60,15 @@ do:
   # Digital Ocean account keys
   client_key: YourClientIDCopiedFromControlPanel
   api_key: YourAPIKeyCopiedFromControlPanel
+  
+  # This is the name of your SSH key in your Digital Ocean account
   ssh_key_name: digital-ocean-salt-cloud.pub
   
-  # Directory & file name on your Salt master
+  # This is the path to the private key for your Digital Ocean account
   ssh_key_file: /keys/digital-ocean-salt-cloud
 ~~~~
 
-And you should have something like the following in `/etc/salt/cloud.profiles.d/digital_ocean.conf`:
+And we'll put this in `/etc/salt/cloud.profiles.d/digital_ocean.conf`:
 
 ~~~~
 ubuntu_512MB_ny2:
@@ -55,8 +89,47 @@ ubuntu_1GB_ny2:
 
 ~~~~
 
+Test your configuration with a quick query. Assuming you have some droplets on Digital Ocean, you should see something like the following.
+
+~~~~
+root@ubuntu-salt:/var/tmp# salt-cloud -Q
+[INFO    ] salt-cloud starting
+do:
+    ----------
+    digital_ocean:
+        ----------
+        centos-salt:
+            ----------
+            id:
+                2806501
+            image_id:
+                6372108
+            public_ips:
+                192.241.247.229
+            size_id:
+                63
+            state:
+                active
+        ubuntu-salt:
+            ----------
+            id:
+                2806503
+            image_id:
+                6510539
+            public_ips:
+                104.131.241.28
+            size_id:
+                66
+            state:
+                active
+
+
+~~~~
+
+
+
 ## Map Files - The Beginning
-Going with the above profiles, let's say you want two 1GB app servers fronted by a single 512MB reverse proxy. You can place mapfiles wherever is best for you but for this demonstration, let's make a mapfile in `/etc/salt/mapfiles/do-app-with-rproxy.map` and put the following in it:
+Going with the above profiles, let's say you want two 1GB app servers fronted by a single 512MB reverse proxy. You can place mapfiles wherever is best for you but for this demonstration, let's make a mapfile in `/etc/salt/cloud.maps.d/do-app-with-rproxy.map` and put the following in it:
 
 ~~~~
 ubuntu_512MB_ny2:
@@ -70,7 +143,7 @@ ubuntu_1GB_ny2:
 That's it! That's about as simple as a Map File gets. Go ahead and try it out with:
 
 ~~~~
-salt-cloud -P -m /etc/salt/mapfiles/do-app-with-rproxy.map
+salt-cloud -P -m /etc/salt/cloud.maps.d/do-app-with-rproxy.map
 ~~~~
 
 The `-P` is for 'parallel`, telling Salt Cloud to launch all three VMs at the same time (as opposed to one after the other).
@@ -83,7 +156,7 @@ salt '*' test.ping
 
 Once you've successfully created the VMs in your map file, deleting them is just as easy:
 ~~~~
-salt-cloud -d -m /etc/salt/mapfiles/do-app-with-rproxy.conf
+salt-cloud -d -m /etc/salt/cloud.maps.d/do-app-with-rproxy.conf
 ~~~~
 
 Be sure to use that one with caution, though! It will delete *all* the VMs specified in that map file.
@@ -180,7 +253,11 @@ nginx-rproxy:
       - pkg: nginx-rproxy
     - watch:
       - file: nginx-rproxy
-
+  cmd:
+    - run
+    - name: service nginx restart
+    - require:
+      - file: nginx-rproxy
 ~~~~
 
 That's our Salt state. But that's not too interesting. It just installs Nginx and drops a config file. The good stuff is in that config file.
@@ -357,7 +434,7 @@ At this point, you should have a file structure that looks like the following:
 We're done! All that's left is to deploy the application.
 
 ~~~~
-salt-cloud -P -m /etc/salt/mapfiles/do-app-with-rproxy.map
+salt-cloud -P -m /etc/salt/cloud.maps.d/do-app-with-rproxy.map
 ~~~~
 
 Wait for Salt Cloud to complete (it can take a few minutes). Once it returns, confirm successful deployment with a quick test:
@@ -373,7 +450,17 @@ nginx-rproxy:
     True
 ~~~~
 
-Sweet! Now that you have your VMs, time to give them work.
+If you don't see output like this, try the `test.ping` a couple more times (sometimes it can take a minute for the minions to check in). If the minions are still not reporting in (and if you saw any errors during the salt-cloud deployment), remove the VMs and re-run the deployment with:
+
+~~~~
+# Delete the VMs
+salt-cloud -d -m /etc/salt/cloud.maps.d/do-app-with-rproxy.map
+
+# Re-deploy the VMs
+salt-cloud -P -m /etc/salt/cloud.maps.d/do-app-with-rproxy.map
+~~~~
+
+Once you have your VMs, it's time to give them work.
 
 ~~~~
 # Deploy the app farm
