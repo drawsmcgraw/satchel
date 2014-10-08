@@ -33,7 +33,7 @@ sudo apt-get intall python-pip
 sudo pip install apache-libcloud
 
 # Install Salt Cloud
-sudo apt-get install salt-cloud
+sudo apt-get install salt-cloud salt-master
 ~~~~
 
 Confirm a successful installation when done.
@@ -68,7 +68,7 @@ do:
   ssh_key_file: /keys/digital-ocean-salt-cloud
 ~~~~
 
-And we'll put this in `/etc/salt/cloud.profiles.d/digital_ocean.conf`:
+And we'll put the following in `/etc/salt/cloud.profiles.d/digital_ocean.conf`:
 
 ~~~~
 ubuntu_512MB_ny2:
