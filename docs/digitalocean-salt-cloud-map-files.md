@@ -62,11 +62,15 @@ do:
   api_key: YourAPIKeyCopiedFromControlPanel
   
   # This is the name of your SSH key in your Digital Ocean account
-  ssh_key_name: digital-ocean-salt-cloud.pub
+  # as it appears in the control panel.          #################################
+  ssh_key_name: digital-ocean-salt-cloud # <---  CHANGE THIS to be your key name #
+                                                 #################################
   
-  # This is the path to the private key for your Digital Ocean account
-  ssh_key_file: /keys/digital-ocean-salt-cloud
-~~~~
+  # This is the path on disk to the private key for your Digital Ocean account
+                                                                    ####################################
+  ssh_key_file: /home/root/keys/digital-ocean-salt-cloud.key # <--- CHANGE THIS to be your private key #
+                                                                    ####################################
+~~~~  
 
 And we'll put the following in `/etc/salt/cloud.profiles.d/digital_ocean.conf`:
 
