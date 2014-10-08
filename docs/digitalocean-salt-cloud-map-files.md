@@ -68,7 +68,7 @@ do:
   
   # This is the path on disk to the private key for your Digital Ocean account
                                                                     ####################################
-  ssh_key_file: /home/root/keys/digital-ocean-salt-cloud.key # <--- CHANGE THIS to be your private key #
+  ssh_key_file: /home/root/.ssh/digital-ocean-salt-cloud.key # <--- CHANGE THIS to be your private key #
                                                                     ####################################
 ~~~~  
 
