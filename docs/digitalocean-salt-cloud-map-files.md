@@ -1,65 +1,152 @@
-# Use Salt Cloud Map Files to Deploy Application Servers and a Reverse Proxy.
+<!--
+Changelog:
+- Moved Salt Cloud installation to Step One
+- Added Creating a Keypair and enabling the API to prereqs
+- Added an introductory paragraph
+- Removed the Ubuntu section (may add back in once proven functional)
+- Better organization/presentation for configuring Salt Cloud, specifically providers & profiles
+-->
 
-### In this tutorial we'll show you how to define your application in a Salt Cloud map file, including the use of custom grains to assign roles to your servers and dynamically configure a reverse proxy. At the end of this tutorial, you will have:
+# Use Salt Cloud Map Files to Deploy App Servers & an Nginx Reverse Proxy
+
+
+### Introduction
+
+You have your app written and it looks great. Now you need to deploy it. You could make a production environment and set your app up on a VM. After all, it's just a clone of the code. But how do you scale it when it gets popular? How do you roll out new versions? What about load balancing? And most importantly, how can you be certain the configuration is correct? We can automate all of this to save ourselves a lot of time.
+
+In this tutorial we'll show you how to define your application in a Salt Cloud map file, including the use of custom Salt grains to assign roles to your servers and dynamically configure a reverse proxy. At the end of this tutorial, you will have:
+
+<!-- Please explain more why a reader skimming through this article would want to follow this tutorial; that is, what the high-level use is (saving time and having correct configurations for deployment, etc.). Also, give this introduction a quick grammar check! Thanks! -->
 
 * Two basic app servers
 * An nginx reverse proxy with a dynamically-built configuration
 * The ability to scale your application in  minutes
 
+We'll be running Salt Cloud on a CentOS VM (6.5 or 7), so you'll need to create a CentOS droplet to run through this tutorial. We'll also be creating three Ubuntu 14.04 VMs automaticaly via Salt Cloud.
+
+
 ## Prerequisites
 
-### A Note About Your Salt Master
+### Create a Keypair and Enable the Digital Ocean API
+If you don't already have an SSH key to log into Digital Ocean droplets, you'll need to create one. You can follow [How To Use SSH Keys with Digital Ocean Droplets](https://www.digitalocean.com/community/tutorials/how-to-use-ssh-keys-with-digitalocean-droplets) for instructions.
+
+Visit the [API Access](https://cloud.digitalocean.com/api_access) page and click 'Generate New Key'. Make note of the 'Client ID' and the 'API Key'. We'll use these later when we configure Salt Cloud.
+
+For this tutorial, we'll assume the following values:
+
+````
+Client ID: i-am-a-client-id
+API Key  : this-is-my-api-key
+````
+
+### Create a CentOS VM
+Since we're running salt-cloud on CentOS, you'll need to create a VM and log into it. A 1GB / 1cpu VM should be plenty. 
+
+All commands in this tutorial will be run as root.
+
+### Salt Master Must Be Accesible to Minions
 The Salt Master that you use for this tutorial will need to be accessible to the minions you will create. This means that if you're on your home machine behind a NAT'd network, you'll need to create a droplet (or some other publicly-accessible machine) and use that for your Salt Master.
 
-### Install Salt
-You'll need to have Salt Cloud configured on your machine. Fortunately, since [Salt Cloud is part of salt since version Hydrogen](https://github.com/saltstack/salt-cloud), simply installing Salt gets us Salt Cloud. For the RHEL family (RedHat, CentOS, etc...), we'll just use the Salt bootstrap script. For Ubuntu, we'll need a few extra steps. For more production-like environments, you'll want to [read the documentation for your OS](http://docs.saltstack.com/en/latest/topics/installation/).
+<!--
 
-On RHEL systems.
-~~~~
-# Fetch and run the Salt bootstrap script to install Salt
+Some notes about section headers:
+
+This one doesn't need it, but when you get to the main steps, we typically use "Step One — Action" as the section header.
+
+With this title and others, see how descriptive you can be. For example, "Salt Master Must Be Accessibl to Minions" describes the section at a glance.
+
+If someone just skimmed through the tutorial reading only the headers, they should have a perfect sense of the summary of each section.
+ 
+-->
+
+## Step 1 - Install Salt and Salt Cloud
+
+You'll need to have Salt Cloud configured on your machine. Fortunately, since [Salt Cloud is part of salt since version Hydrogen](https://github.com/saltstack/salt-cloud), simply installing Salt gets us Salt Cloud. For this tutorial, we'll just use the Salt bootstrap script. For more production-like environments, you'll want to [read the documentation for your OS](http://docs.saltstack.com/en/latest/topics/installation/).
+
+<!-- I would change the focus of this paragraph slightly to say that the reader should start by installing Salt and Salt Cloud. The fact that the installation method changed can be more of a side note in the paragraph. -->
+
+
+Install Salt and Salt Cloud
+Fetch the Salt bootstrap script to install Salt.
+
+````
 wget -O install_salt.sh https://bootstrap.saltstack.com
+````
 
-# Use the -M flag to also install 'salt-master' so we get salt cloud
+Run the Salt bootstrap script. We use the -M flag to also install 'salt-master' so we get salt cloud.
+
+````
 sh install_salt.sh -M
-~~~~
+````
 
-On Ubuntu
-~~~~
-# Add the PPA
-sudo add-apt-repository ppa:saltstack/salt
 
-# Salt Cloud requires libcloud. We'll install via Pip
-sudo apt-get intall python-pip
-sudo pip install apache-libcloud
+Check Salt Cloud's version to confirm a successful installation:
 
-# Install Salt Cloud
-sudo apt-get install salt-cloud salt-master
-~~~~
+````
+salt-cloud -version
+````
 
-Confirm a successful installation when done.
+You should see output like this:
 
-~~~~
-root@ubuntu-salt:/var/tmp# salt-cloud --version                                                                                                                                                                      
+````
 salt-cloud 2014.1.11 (Hydrogen)
-~~~~
+````
 
-### Configure Salt Cloud
+
+## Step 2 - Configure Salt Cloud
+
+<!-- I'm not sure this should be a Level 3 header; it seems like a significant enough step to be a Level 2 header. I would write out all of the headers you have in this tutorial and make sure they are all descriptive and at the right level. Does the TOC by itself make a good structure for this tutorial?
+
+-->
+
+<!--
+
+Actual steps in this section. Please put these on their own lines with appropriate explanations. You can link to the SSH Keys tutorial if you want to.
+
+These actions are to be completed on the Salt Master host as the **root** user.
+
+[root@saltmap2 ~]# mkdir /etc/salt/cloud.providers.d
+[root@saltmap2 ~]# mkdir /etc/salt/cloud.profiles.d
+
+ssh-keygen -t rsa
+
+Add this key to the DigitalOcean control panel.
+
+While you're in the control panel, you have to enable the API, go to the first version of the API, and generate and note down an ID and a key. You should either provide screenshots for this or link to a tutorial that has a thorough explanation of how to use the first version of the API.
+
+Side note - does Salt Cloud have a way to use the newer version of the API?
+
+nano /etc/salt/cloud.providers.d/digital_ocean.conf
+
+-->
+
 Regardless of installation method, configuring Salt Cloud will be the same. You'll need at least one `provider` (e.g. Digital Ocean) and at least one `profile` (e.g. Ubuntu 512MB).Those are defined at the following locations (NOTE: You may need to make these directories yourself if they don't exist):
 
 * `/etc/salt/cloud.providers.d` -- cloud providers (e.g. digitalocean)
 * `/etc/salt/cloud.profiles.d` -- cloud profiles (e.g. ubuntu_2GB)
 
-For this tutorial, let's put the following in `/etc/salt/cloud.providers.d/digital_ocean.conf`:
+### Configure The Digital Ocean Provider
+In Salt Cloud, 'providers' are how you define where the new VMs will be created). 
 
-~~~~
+Configure the Digital Ocean provider: 
+
+````
+nano /etc/salt/cloud.providers.d/digital_ocean.conf
+````
+
+Insert the below text. 
+
+````
+### /etc/salt/cloud.providers.d/digital_ocean.conf ###
+######################################################
 do:
   provider: digital_ocean
   minion:                       #########################################
     master: 10.10.10.10  # <--- CHANGE THIS to be your Salt Master's IP #
                                 #########################################
   # Digital Ocean account keys
-  client_key: YourClientIDCopiedFromControlPanel
-  api_key: YourAPIKeyCopiedFromControlPanel
+  client_key: i-am-a-client-id
+  api_key: this-is-my-api-key
   
   # This is the name of your SSH key in your Digital Ocean account
   # as it appears in the control panel.          #################################
@@ -70,17 +157,60 @@ do:
                                                                     ####################################
   ssh_key_file: /home/root/.ssh/digital-ocean-salt-cloud.key # <--- CHANGE THIS to be your private key #
                                                                     ####################################
-~~~~  
 
-And we'll put the following in `/etc/salt/cloud.profiles.d/digital_ocean.conf`:
+````
 
-~~~~
+There are several values here that you'll need to change.
+
+**master** - This is the IP of the Salt master that you are using.
+
+**client_key** - This is your Digital Ocean Client ID from the API Access page. 
+
+**api_key** - This is your Digital Ocean API key, also from the Digital Ocean API Access page. 
+
+**ssh_key_name** - This is the name of the SSH key you use to log into droplets as it appears on the [SSH Keys](https://cloud.digitalocean.com/ssh_keys) page on the Digital Ocean console.
+
+**ssh_key_file** - This is the path, on disk, where Salt Cloud can find the private key that it will use to log into new droplets.
+
+
+<!-- 
+
+You already created an updated version of this config file that you can put here instead of this one.
+
+Make sure that you thoroughly explain where each of these values is coming from (the IP, the API stuff, and the SSH key stuff). You'll probably want this in paragraphs either above or below the file, in addition to having short in-line comments.
+
+Also, can you make sure any comments you add in the file have good ASCII formatting so it doesn't end up looking off when it gets copied and pasted?
+
+Finally, you can use a special syntax like this:
+
+<^>mark variables<^>
+
+This symbol (<^>) will make everything between it highlighted in red.
+
+-->
+
+### Configure The Digital Ocean Profiles
+In Salt Cloud, 'profiles' are individual VM descriptions that are tied to a provider. An example of a profile can be "A 512MB Ubuntu VM in Digital Ocean".
+
+
+Configure the profiles:
+
+````
+nano /etc/salt/cloud.profiles.d/digital_ocean.conf
+````
+
+Paste the following into the file:
+
+````
+### /etc/salt/cloud.profiles.d/digital_ocean.conf ###
+#####################################################
+
 ubuntu_512MB_ny2:
   provider: do
   image: Ubuntu 14.04 x64
   size: 512MB
 #  script: Optional Deploy Script Argument
-  location: New York 2
+  location: New York 3
   private_networking: True
 
 ubuntu_1GB_ny2:
@@ -88,14 +218,60 @@ ubuntu_1GB_ny2:
   image: Ubuntu 14.04 x64
   size: 1GB
 #  script: Optional Deploy Script Argument
-  location: New York 2
+  location: New York 3
   private_networking: True
 
-~~~~
+````
+
+This file defines two profiles:
+
+* An Ubuntu 14.04 VM with 512MB of memory, living in the New York 3 data canter.
+* An Ubunto 14.04 VM with 1GB of memory, living in the New York 3 data center.
+
+No additional configuration is needed in this file.
+
+We found the image names by using Salt Cloud to get a listing of images in Digital Ocean. For example, to get a listing of available images in Digital Ocean using our configuration:
+
+````
+salt-cloud --list-images do
+````
+
+The output is long, but part of it looks like:
+
+````
+         Ubuntu 14.04 x64:
+            ----------
+            distribution:
+                Ubuntu
+            id:
+                6918990
+            name:
+                Ubuntu 14.04 x64
+            public:
+                True
+            region_slugs:
+                [u'nyc1', u'ams1', u'sfo1', u'nyc2', u'ams2', u'sgp1', u'lon1', u'nyc3', u'ams3']
+            regions:
+                [1, 2, 3, 4, 5, 6, 7, 8, 9]
+            slug:
+                ubuntu-14-04-x64
+    
+
+````
+
+<!-- 
+
+Can you introduce a bit more what this file does? It can be a sentence or two.
+
+Maybe this should switch to NY 3, because that's the newer data center?
+
+You can let the reader know that they can copy this file exactly 
+
+-->
 
 Test your configuration with a quick query. Assuming you have some droplets on Digital Ocean, you should see something like the following.
 
-~~~~
+````
 root@ubuntu-salt:/var/tmp# salt-cloud -Q
 [INFO    ] salt-cloud starting
 do:
@@ -128,47 +304,227 @@ do:
                 active
 
 
-~~~~
+````
 
+<!-- Please separate commands and output, here and throughout the tutorial. Thanks! Also, we don't need the shell prompt.
+
+-->
 
 
 ## Map Files - The Beginning
+
+<!-- 
+
+"Simple Deployment" or something similar is more descriptive than "The Beginning"
+
+-->
+
 Going with the above profiles, let's say you want two 1GB app servers fronted by a single 512MB reverse proxy. You can place mapfiles wherever is best for you but for this demonstration, let's make a mapfile in `/etc/salt/cloud.maps.d/do-app-with-rproxy.map` and put the following in it:
 
-~~~~
+<!--
+
+mkdir /etc/salt/cloud.maps.d/
+
+nano /etc/salt/cloud.maps.d/do-app-with-rproxy.map
+
+I suggest putting the appropriate nano or vim command on its own line before every single example file. That way the reader will easily be able to start editing the correct file, and it will save headaches like the ones we ran into during testing!
+
+-->
+
+````
 ubuntu_512MB_ny2:
   - nginx-rproxy
   
 ubuntu_1GB_ny2:
   - appserver-01
   - appserver-02
-~~~~
+````
 
 That's it! That's about as simple as a Map File gets. Go ahead and try it out with:
 
-~~~~
+````
 salt-cloud -P -m /etc/salt/cloud.maps.d/do-app-with-rproxy.map
-~~~~
+````
 
 The `-P` is for 'parallel`, telling Salt Cloud to launch all three VMs at the same time (as opposed to one after the other).
 
+<!-- You don't have to show all of it, but it might be good to show the last few lines of successful output
+
+[root@saltmap2 ~]# salt-cloud -P -m /etc/salt/cloud.maps.d/do-app-with-rproxy.map
+[INFO    ] salt-cloud starting
+[INFO    ] Applying map from '/etc/salt/cloud.maps.d/do-app-with-rproxy.map'.
+The following virtual machines are set to be created:
+  appserver-01
+  appserver-02
+  nginx-rproxy
+
+Proceed? [N/y] y
+... proceeding
+[INFO    ] Calculating dependencies for appserver-01
+[INFO    ] Calculating dependencies for appserver-02
+[INFO    ] Calculating dependencies for nginx-rproxy
+[INFO    ] Since parallel deployment is in use, ssh console output is disabled. All ssh output will be logged though
+[INFO    ] Cloud pool size: 3
+[INFO    ] Creating Cloud VM appserver-01
+[INFO    ] Creating Cloud VM nginx-rproxy
+[INFO    ] Creating Cloud VM appserver-02
+[INFO    ] Rendering deploy script: /usr/lib/python2.7/site-packages/salt/cloud/deploy/bootstrap-salt.sh
+[INFO    ] Rendering deploy script: /usr/lib/python2.7/site-packages/salt/cloud/deploy/bootstrap-salt.sh
+[INFO    ] Rendering deploy script: /usr/lib/python2.7/site-packages/salt/cloud/deploy/bootstrap-salt.sh
+[INFO    ] Salt installed on appserver-01
+[INFO    ] Created Cloud VM 'appserver-01'
+[INFO    ] Salt installed on appserver-02
+[INFO    ] Created Cloud VM 'appserver-02'
+[INFO    ] Salt installed on nginx-rproxy
+[INFO    ] Created Cloud VM 'nginx-rproxy'
+appserver-01:
+    ----------
+    backups_active:
+        False
+    created_at:
+        2014-10-14T21:19:51Z
+    droplet:
+        ----------
+        event_id:
+            34406200
+        id:
+            2874010
+        image_id:
+            6713522
+        name:
+            appserver-01
+        size_id:
+            63
+    id:
+        2874010
+    image_id:
+        6713522
+    ip_address:
+        107.170.79.180
+    locked:
+        True
+    name:
+        appserver-01
+    private_ip_address:
+        10.128.128.193
+    region_id:
+        4
+    size_id:
+        63
+    status:
+        new
+appserver-02:
+    ----------
+    backups_active:
+        False
+    created_at:
+        2014-10-14T21:19:53Z
+    droplet:
+        ----------
+        event_id:
+            34406202
+        id:
+            2874011
+        image_id:
+            6713522
+        name:
+            appserver-02
+        size_id:
+            63
+    id:
+        2874011
+    image_id:
+        6713522
+    ip_address:
+        107.170.22.18
+    locked:
+        True
+    name:
+        appserver-02
+    private_ip_address:
+        10.128.129.4
+    region_id:
+        4
+    size_id:
+        63
+    status:
+        new
+nginx-rproxy:
+    ----------
+    backups_active:
+        False
+    created_at:
+        2014-10-14T21:19:55Z
+    droplet:
+        ----------
+        event_id:
+            34406203
+        id:
+            2874012
+        image_id:
+            6713522
+        name:
+            nginx-rproxy
+        size_id:
+            66
+    id:
+        2874012
+    image_id:
+        6713522
+    ip_address:
+        104.131.216.16
+    locked:
+        True
+    name:
+        nginx-rproxy
+    private_ip_address:
+        10.128.129.44
+    region_id:
+        4
+    size_id:
+        66
+    status:
+        new
+
+-->
+
 Confirm success with a quick ping:
 
-~~~~
+````
 salt '*' test.ping
-~~~~
+````
+
+<!-- Successful output should look like? -->
 
 Once you've successfully created the VMs in your map file, deleting them is just as easy:
-~~~~
+
+````
 salt-cloud -d -m /etc/salt/cloud.maps.d/do-app-with-rproxy.conf
-~~~~
+````
+
+<!--
+
+Wrong file path in original, use
+
+/etc/salt/cloud.maps.d/do-app-with-rproxy.map
+
+-->
 
 Be sure to use that one with caution, though! It will delete *all* the VMs specified in that map file.
 
 ## Map Files - Moar Cloud
+
+<!-- Please update this header to be more descriptive. Thanks! -->
+
 That's nice and all, but a shell script can make a set of VMs. What we need is to define the footprint of our application. Let's go back to our map file and add the following:
 
-~~~~
+<!-- Give file name again 
+
+vim /etc/salt/cloud.maps.d/do-app-with-rproxy.map
+
+-->
+
+````
 ubuntu_512MB_ny2:
   - nginx-rproxy:
       minion:
@@ -193,47 +549,62 @@ ubuntu_1GB_ny2:
       grains:
         roles: appserver
 
-~~~~
+````
 
 Now we're getting somewhere! It looks like a lot but we've only added two things. Let's go over the two additions.
 
 1)
-~~~~
+````
       grains:
         roles: appserver
-~~~~
+````
+
 We've told Salt Cloud to modify the Salt Minion config for these VMs and add some custom grains. Specifically, give the reverse proxy the `rproxy` role and give the app servers the `appserver` role. This will come in handy when we need to dynamically configure the reverse proxy.
 
+<!-- What are grains? Please provide a link and/or brief explanation -->
+
 2)
-~~~~
+````
       mine_functions:
         network.ip_addrs:
           interface: eth0
-~~~~
+````
+
 This will also be added to the Salt Minion config. It instructs the Minion to send the IP address found on `eth0` back to the Salt Master to be stored in the [Salt mine](http://docs.saltstack.com/en/latest/topics/mine/). We'll be using that in the next part.
 
+<!-- Can you explain more what this accomplishes? For someone new to Salt, what does this mean? -->
+
 ## Define the Reverse Proxy
+
 We have a common task in front of us now - install the reverse proxy and configure it. For this tutorial we'll be using Nginx as the reverse proxy. 
 
 It's time to get our hands dirty and write a few Salt states. If it doesn't exist yet, go ahead and make the default Salt state tree location:
 
-~~~~
+````
 mkdir /srv/salt
-~~~~  
+````  
 
 Navigate into that directory and make one more directory just for nginx:
-~~~~
+
+````
 cd /srv/salt
-mkdir nginx
-~~~~
+mkdir /srv/salt/nginx
+````
+
+
+
 Go into that directory and, using your favorite editor, create a new file called `rproxy.sls`:
-~~~~
+
+````
 cd nginx
-vim rproxy.sls
-~~~~
+vim /srv/salt/nginx/rproxy.sls
+````
+
+<!-- Please use complete file names throughout the tutorial. -->
 
 Place the following into that file:
-~~~~
+
+````
 ### /srv/salt/nginx/rproxy.sls
 ### Install nginx and configure it as a reverse proxy, pulling the IPs of
 ### the app servers from the Salt Mine.
@@ -262,21 +633,30 @@ nginx-rproxy:
     - name: service nginx restart
     - require:
       - file: nginx-rproxy
-~~~~
+````
+
+<!-- Please explain what this does more thoroughly. Users should be able to follow along with the main blocks and settings in every config file in the tutorial. That way, they will be able to customize their own setups and/or troubleshoot when something goes wrong.
+
+You can provide explanation in paragraphs or bullet points above or below the sample file, or you can link to a different tutorial that explains similar files. -->
 
 That's our Salt state. But that's not too interesting. It just installs Nginx and drops a config file. The good stuff is in that config file.
 
 
-## Querying Salt Mine to Configure the Reverse Proxy 
+## Querying Salt Mine to Configure the Reverse Proxy
+
 Let's make one more directory and write that config file:
-~~~~
-mkdir files
-cd files
-vim awesome-app.conf.jin
-~~~~
+
+````
+mkdir /srv/salt/nginx/files
+cd /srv/salt/nginx/files
+vim /srv/salt/nginx/files/awesome-app.conf.jin
+````
+
+<!-- You can combing mdkir and cd, but please put the vim command on its own line. -->
 
 And put the following in that config file:
-~~~~
+
+````
 ### /srv/salt/nginx/files/awesome-app.conf.jin
 ### Configuration file for Nginx to act as a 
 ### reverse proxy for an app farm.
@@ -303,27 +683,38 @@ server {
      proxy_set_header        X-Forwarded-For $proxy_add_x_forwarded_for;
    }
 }
-~~~~
+````
+
 We use the `.jin` extension to tell ourselves that the file contains [Jinja templating](http://docs.saltstack.com/en/latest/ref/renderers/all/salt.renderers.jinja.html).
+
+<!-- Please add another sentence or two about Jinja for the beginning Salt or Jinja user. -->
 
 This Nginx config has two parts - 1) an upstream (our app farm) and 2) the configuration to act as a proxy between the user and our app farm. Let's look at the upstream config.
 
+<!-- Thanks for providing some additional explanation here. I think it could go one step further in explaining what this file accomplishes, though. -->
+
 Before we explain what we did for the upstream, let's look at a normal, non-templated upstream.
-~~~~
+
+````
 upstream hard-coded {
   server 10.10.10.1
   server 10.10.10.2
 }
-~~~~
+````
+
 That's it. That tells Nginx that there's an upstream that is served up by that collection of IPs. 
+
+<!-- Link to a more basic tutorial that explains this type of Nginx setup so the reader can learn more if they want to. -->
 
 Protip: The default behavior in Nginx is to use a round-robin method of load balancing. You can easily specify other methods (such as `least connected` or `sticky` sessions). See [the Nginx doc](http://nginx.org/en/docs/http/load_balancing.html) for more.
 
+<!-- Where in the file would the reader set an alternate method of balancing? -->
+
 Back to us. We don't know what the IP of our Minions will be until they exist. And we don't edit config files *by hand*. We're better than that. Remember our `mine_function` lines in our map file? The Minions are giving their IP to the Salt Master to store them for just such an occassion. Let's look at that Jinja line a little closer:
 
-~~~~
+````
 {% for server, addrs in salt['mine.get']('roles:appserver', 'network.ip_addrs', expr_form='grain').items() %}
-~~~~
+````
 
 This is a for-loop in Jinja, running an arbitrary Salt function. In this case, it's running [`mine.get`](http://docs.saltstack.com/en/latest/ref/modules/all/salt.modules.mine.html#salt.modules.mine.get). The parameters are:
 
@@ -334,26 +725,34 @@ This is a for-loop in Jinja, running an arbitrary Salt function. In this case, i
 Following this loop, the variable `addr` contains a list of IP addresses (even if it's only one address). Because it's a list, we have to grab the first element with `[0]`.
 
 That's the upstream. As for the server name:
-~~~~
+
+````
 server_name  {{ salt['network.ip_addrs']()[0] }};
-~~~~
+````
 
 This is the same trick as the Salt mine call (call a Salt function in Jinja). It's just simpler. It's calling [`network.ip_addrs`](http://docs.saltstack.com/en/latest/ref/modules/all/salt.modules.network.html#salt.modules.network.ip_addrs) and taking the first element of the returned list. This also lets us avoid having to manually edit our file.
+
+<!-- There are some good explanations in here! Just make sure they're all accessible to a beginner reader. -->
 
 ## Define the App Farm
 A reverse proxy doesn't mean much if it doesn't have an app behind it. Let's make a small Nodejs application that just reports the IP of the server it's on (so we can confirm we're reaching both machines).
 
 Back in our state tree, make a new directory called `awesome-app`. Create a new file called `app.sls`.
-~~~~
+
+<!-- What is a state tree? -->
+
+````
 cd /srv/salt
-mkdir awesome-app
-cd awesome-app
-vim app.sls
-~~~~
+mkdir /srv/salt/awesome-app
+cd /srv/salt/awesome-app
+vim /srv/salt/awesome-app/app.sls
+````
+
+<!-- Please separate these commands. You could probably use a mkdir -p here. -->
 
 Place the following into the file:
 
-~~~~
+````
 ### /srv/salt/awesome-app/app.sls
 ### Install Nodejs and start a simple
 ### web application that reports the server IP.
@@ -380,17 +779,23 @@ run-app:
     - run
     - name: forever start app.js
     - cwd: /root
-~~~~  
+````
+
+<!-- What does the file above do? --> 
 
 Now create the (small!) app code:
-~~~~
-mkdir files
-cd files
-vim app.js
-~~~~
+
+````
+mkdir /srv/salt/awesome-app/files
+cd /srv/salt/awesome-app/files
+vim /srv/salt/awesome-app/files/app.js
+````
+
+<!-- Please separate these commands -->
 
 Place the following code into the file:
-~~~~
+
+````
 /* /srv/salt/awesome-app/files/app.js
    A simple NodeJS web application that
    reports the server's IP.
@@ -418,11 +823,13 @@ http.createServer(function (req, res) {
 }).listen(1337, '0.0.0.0');
 console.log('Server listening on port 1337');
 
-~~~~ 
+```` 
+
+<!-- Please explain more thoroughly what this file does, or link to an appropriate article. For example, you can say "To learn more about Node.js apps, please read this article" with a link -->
 
 At this point, you should have a file structure that looks like the following:
 
-~~~~
+````
 /srv/salt
          ├── awesome-app
          │   ├── app.sls
@@ -432,18 +839,23 @@ At this point, you should have a file structure that looks like the following:
              ├── files
              │   └── awesome-app.conf.jin
              └── rproxy.sls
-~~~~
+````
+
+<!-- Chart is not uniform in how it shows subfolders and files -->
 
 ## Deploy!
+
 We're done! All that's left is to deploy the application.
 
-~~~~
+````
 salt-cloud -P -m /etc/salt/cloud.maps.d/do-app-with-rproxy.map
-~~~~
+````
 
 Wait for Salt Cloud to complete (it can take a few minutes). Once it returns, confirm successful deployment with a quick test:
 
-~~~~
+<!-- I would show a few lines of successful output -->
+
+````
 [root@salt-master salt]# salt -G 'roles:appserver' test.ping
 appserver-02:
     True
@@ -452,48 +864,110 @@ appserver-01:
 [root@salt-master salt]# salt -G 'roles:rproxy' test.ping
 nginx-rproxy:
     True
-~~~~
+````
+
+<!-- Please separate these commands. Thanks! -->
+
+<!--
+
+Show successful ping output
+
+[root@saltmap2 ~]# salt -G 'roles:appserver' test.ping
+appserver-01:
+    True
+appserver-02:
+    True
+[root@saltmap2 ~]# salt -G 'roles:rproxy' test.ping
+nginx-rproxy:
+    True
+    
+--> 
 
 If you don't see output like this, try the `test.ping` a couple more times (sometimes it can take a minute for the minions to check in). If the minions are still not reporting in (and if you saw any errors during the salt-cloud deployment), remove the VMs and re-run the deployment with:
 
-~~~~
+````
 # Delete the VMs
 salt-cloud -d -m /etc/salt/cloud.maps.d/do-app-with-rproxy.map
 
 # Re-deploy the VMs
 salt-cloud -P -m /etc/salt/cloud.maps.d/do-app-with-rproxy.map
-~~~~
+````
 
 Once you have your VMs, it's time to give them work.
 
-~~~~
+<!-- I would start a new section header here -->      
+
+````
 # Deploy the app farm
 salt -G 'roles:appserver' state.sls awesome-app.app
 
 # Deploy the reverse proxy
 salt -G 'roles:rproxy' state.sls nginx.rproxy
-~~~~
+````
 
 You should see (a lot of) output ending in something like the following:
 
-~~~~
+<!-- Is the below output for both commands? I got it for deploying the 'appserver' ones. I would separate these two commands and show command 1, output 1, then command 2, output 2 -->
+
+````
 Summary
 ------------
 Succeeded: 6
 Failed:    0
 ------------
 Total:     6
-~~~~
+````
+
+<!--
+
+output for the second one
+
+Summary
+------------
+Succeeded: 4
+Failed:    0
+------------
+Total:     4
+
+-->
+
+<!-- This would be a great place to recap what has been accomplished from a high-level technical perspective; what got deployed and why. -->
 
 Once those Salt runs complete, you can test to confirm successful deployment. Find the ip of your reverse proxy:
 
-~~~~
+````
 salt -G 'roles:rproxy' network.ip_addrs
-~~~~
+````
+
+<!-- I actually got two IPs from doing this, I think because I had private networking enabled. -->
 
 Plug that IP into your browser and profit! Hit refresh a few times to confirm that Nginx is actually proxying among the two app servers you built.
 
+<!--
+
+I'm seeing two IPs. The first one is getting "This webpage is not available" even though the deployment seems to be successful.
+
+The second one shows two IPs.
+
+["107.170.79.180","10.128.128.193"]
+
+Can you explain what should change when the page refreshes?
+
+-->
+
 We can take this a few steps further and *completely* automate the application deployment via [overstate](http://docs.saltstack.com/en/latest/topics/tutorials/states_pt5.html#states-overstate) but that's an exercise for later.
+
+<!-- You don't have to introduce overstate, but if you do, you should briefly explain how it makes deployment more automatic. -->
+
+<!--
+
+Can you go into a very brief "next steps" type discussion about how the reader would deploy something more practical with this kind of setup? Seeing a page with 2 IPs at the end is not immediately useful. You could say something like "You'll want to replace our awesomeapp with your own app and adjust files X and Y" or something like that.
+
+-->
 
 ## Scale it!
 If you need more servers for your app farm (or more Nginx servers for load balancing), just revisit that map file, add another entry for each new server, and re-run the instructions in the "Deploy!" section. The existing VMs won't be impacted by the repeat Salt run and the new VMs will be built-to-spec and join the application.
+
+<!-- I would give an example map file with a bigger deployment, and specify actual step numbers, like "then re-run Steps 6-7" -->
+
+<!-- Thanks for all your hard work on this! -->
