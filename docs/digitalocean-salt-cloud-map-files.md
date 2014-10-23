@@ -59,14 +59,14 @@ If someone just skimmed through the tutorial reading only the headers, they shou
  
 -->
 
-## Step Three - Install Salt and Salt Cloud
+## Step One - Install Salt and Salt Cloud
 
 You'll need to have Salt Cloud configured on your machine. Fortunately, since [Salt Cloud is part of salt since version Hydrogen](https://github.com/saltstack/salt-cloud), simply installing Salt gets us Salt Cloud. For this tutorial, we'll just use the Salt bootstrap script. For more production-like environments, you'll want to [read the documentation for your OS](http://docs.saltstack.com/en/latest/topics/installation/).
 
 <!-- I would change the focus of this paragraph slightly to say that the reader should start by installing Salt and Salt Cloud. The fact that the installation method changed can be more of a side note in the paragraph. -->
 
 
-Install Salt and Salt Cloud
+
 Fetch the Salt bootstrap script to install Salt.
 
 ````
@@ -154,7 +154,7 @@ do:
   
   # This is the path on disk to the private key for your Digital Ocean account
                                                                     
-  ssh_key_file: <^>/home/root/.ssh/digital-ocean-salt-cloud.key<^>                                                                
+  ssh_key_file: <^>/root/.ssh/digital-ocean-salt-cloud.key<^>                                                                
 ````
 
 There are several values here that you'll need to change.
@@ -227,7 +227,7 @@ This file defines two profiles:
 
 No additional configuration is needed in this file.
 
-We found the image name by using Salt Cloud to get a listing of images in Digital Ocean. For example, to get a listing of available images in Digital Ocean using our configuration:
+We found the image name by using Salt Cloud to get a listing of images in Digital Ocean. For example, to get a listing of available images in Digital Ocean using our configuration, we would type:
 
 ````
 salt-cloud --list-images do
@@ -267,7 +267,7 @@ You can let the reader know that they can copy this file exactly
 
 -->
 
-Test your configuration with a quick query.
+Moving on. Test your configuration with a quick query.
 
 ````
 salt-cloud -Q
@@ -586,6 +586,8 @@ nginx-rproxy:
     True
 ````
 
+If nothing comes back, try the `test.ping` command again a few times. Sometimes it can take a moment before the minions check in to the master.
+
 <!-- Successful output should look like? -->
 
 Once you've successfully created the VMs in your map file, deleting them is just as easy:
@@ -608,7 +610,7 @@ Be sure to use that one with caution, though! It will delete *all* the VMs speci
 
 <!-- Please update this header to be more descriptive. Thanks! -->
 
-That's nice and all, but a shell script can make a set of VMs. What we need is to define the footprint of our application. Let's go back to our map file and add a few mor things.
+That's nice and all, but a shell script can make a set of VMs. What we need is to define the footprint of our application. Let's go back to our map file and add a few more things.
 
 ````
 nano /etc/salt/cloud.maps.d/do-app-with-rproxy.map
@@ -619,6 +621,8 @@ nano /etc/salt/cloud.maps.d/do-app-with-rproxy.map
 vim /etc/salt/cloud.maps.d/do-app-with-rproxy.map
 
 -->
+
+Delete the previous contents of the file and place the following into it. No modification is needed:
 
 ````
 ### /etc/salt/cloud.maps.d/do-app-with-rproxy.map ###
@@ -702,7 +706,7 @@ nano /srv/salt/nginx/rproxy.sls
 
 <!-- Please use complete file names throughout the tutorial. -->
 
-Place the following into that file:
+Place the following into that file. No modification is needed:
 
 ````
 ### /srv/salt/nginx/rproxy.sls ###
@@ -749,7 +753,7 @@ You can provide explanation in paragraphs or bullet points above or below the sa
 This state does the following:
 
 * Installs Nginx
-* Places our custom config file into /etc/nginx/conf.d/awesome-app.conf
+* Places our custom config file into `/etc/nginx/conf.d/awesome-app.conf`
 * Ensures Nginx is running
 
 That's our Salt state. But that's not too interesting. It just installs Nginx and drops a config file. The good stuff is in that config file.
@@ -834,7 +838,7 @@ Protip: The default behavior in Nginx is to use a round-robin method of load bal
 
 ````
 upstream awesome-app {
-  lease_conn;
+  least_conn;
   .
   .
   .
@@ -857,7 +861,7 @@ This is a for-loop in Jinja, running an arbitrary Salt function. In this case, i
 * `network.ip_addrs` - This is the data we want to get out of the mine. We specified this in our map file as well.
 * `expr_form='grain'` - This tells Salt that we're targeting our minions based on their grains. More on matching by grain at [the Saltstack targeting doc](http://docs.saltstack.com/en/latest/topics/targeting/grains.html).
 
-Following this loop, the variable `{{addr}}` contains a list of IP addresses (even if it's only one address). Because it's a list, we have to grab the first element with `[0]`.
+Following this loop, the variable `{{addrs}}` contains a list of IP addresses (even if it's only one address). Because it's a list, we have to grab the first element with `[0]`.
 
 That's the upstream. As for the server name:
 
@@ -884,7 +888,7 @@ cd /srv/salt/awesome-app
 Create the app state file:
 
 ````
-vim /srv/salt/awesome-app/app.sls
+nano /srv/salt/awesome-app/app.sls
 ````
 
 <!-- Please separate these commands. You could probably use a mkdir -p here. -->
@@ -1225,7 +1229,7 @@ salt -G 'roles:appserver' state.sls awesome-app.app
 salt -G 'roles:rproxy' state.sls nginx.rproxy
 ````
 
-The existing VMs won't be impacted by the repeat Salt run, the new VMs will be built-to-spec, and the Nginx config would update to begin routing traffic to the new app servers.
+The existing VMs wouldn't be impacted by the repeat Salt run, the new VMs would be built-to-spec, and the Nginx config would update to begin routing traffic to the new app servers.
 
 <!-- I would give an example map file with a bigger deployment, and specify actual step numbers, like "then re-run Steps 6-7" -->
 
