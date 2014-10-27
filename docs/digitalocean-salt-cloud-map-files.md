@@ -1145,7 +1145,7 @@ The second command (the reverse proxy) executed the Salt state we wrote for Ngin
 Once those Salt runs complete, you can test to confirm successful deployment. Find the ip of your reverse proxy:
 
 ````
-salt -G 'rolses:rproxy' network.ip_addrs
+salt -G 'roles:rproxy' network.ip_addrs
 ````
 
 You may get back two IPs if you're using private networking on your droplet.
