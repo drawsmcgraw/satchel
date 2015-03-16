@@ -3,6 +3,6 @@
 MASTER=some-ip
 yum install -y salt-minion
 mkdir /etc/salt/minion.d
-echo "master: $MASTER" > /etc/salt/minon.d/master.conf
+echo "master: $MASTER" > /etc/salt/minion.d/master.conf
 chkconfig salt-minion on
 service salt-minion start
